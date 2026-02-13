@@ -1,0 +1,183 @@
+import pandas as pd
+import numpy as np
+
+# 1. Define the number of rows
+n_rows = 1000 
+
+# 2. Create synthetic IoT traffic patterns
+# We create 50% Benign (Normal) and 50% Attack data
+data = {
+    'packet_length': np.concatenate([
+        np.random.randint(40, 100, 500),    # Benign: small packets
+        np.random.randint(1200, 1500, 500) # Attack: large/heavy packets
+    ]),
+    'ttl': np.concatenate([
+        np.random.choice([64, 128], 500),   # Benign: standard OS hops
+        np.random.choice([32, 255], 500)    # Attack: anomalous hops
+    ]),
+    'protocol': np.concatenate([
+        np.random.choice([6, 17], 500),     # Benign: TCP/UDP mix
+        np.random.choice([6], 500)          # Attack: TCP only (e.g., SYN flood)
+    ]),
+    'dst_port': np.concatenate([
+        np.random.choice([80, 443], 500),   # Benign: Web ports
+        np.random.choice([23, 2323], 500)   # Attack: Telnet/IoT ports
+    ]),
+    'label': np.concatenate([np.zeros(500), np.ones(500)]) # 0=Safe, 1=Threat
+}
+
+# 3. Create DataFrame and Shuffle
+df = pd.DataFrame(data)
+df = df.sample(frac=1).reset_index(drop=True)
+
+# 4. Save to CSV
+df.to_csv('iot_traffic.csv', index=False)
+print("Success! 'iot_traffic.csv' created for Generator training.")
+
+import os
+if os.path.exists('iot_traffic.csv'):
+    print("✅ Success! File is saved and ready for the Generator.")
+else:
+    print("❌ Error: File not found. Check your path!")
+
+%pip install torch torchvision torchaudio
+
+import torch 
+from sklearn.preprocessing import MinMaxScaler
+
+# 1. Load your brilliant CSV
+df = pd.read_csv('iot_traffic.csv')
+
+# 2. Select only the features (columns) the AI needs to learn
+# We exclude 'label' because the Generator creates the traffic, not the category
+feature_columns = ['packet_length', 'ttl', 'protocol', 'dst_port']
+raw_data = df[feature_columns].values
+
+# 3. Normalize to [0, 1] range 
+# Neural networks struggle with large numbers like 1500 or 8080.
+scaler = MinMaxScaler()
+normalized_data = scaler.fit_transform(raw_data)
+
+# 4. Convert to PyTorch Tensor
+# This becomes the "Real Data" your Discriminator uses to judge the Generator
+real_samples = torch.tensor(normalized_data, dtype=torch.float32)
+
+print(f"Data shape for Training: {real_samples.shape}") # Should be (1000, 4)
+
+import torch.nn as nn
+class Generator(nn.Module):
+    def _init_(self, input_dim, output_dim):
+        super(Generator, self)._init_()
+        self.main = nn.Sequential(
+            nn.Linear(input_dim, 64),  # input_dim is usually 10-100 random numbers
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim), # output_dim = 4 (your CSV columns)
+            nn.Sigmoid()                # Sigmoid keeps values between 0 and 1
+        )
+
+    def forward(self, x):
+        return self.main(x)
+
+class Discriminator(nn.Module):
+    def _init_(self, input_dim):
+        super(Discriminator, self)._init_()
+        self.main = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.LeakyReLU(0.2), # LeakyReLU helps the "Teacher" stay sharp
+            nn.Linear(128, 64),
+            nn.LeakyReLU(0.2),
+            nn.Linear(64, 1),
+            nn.Sigmoid()       # Output is a probability between 0 and 1
+        )
+
+    def forward(self, x):
+        return self.main(x)
+
+import torch.optim as optim
+
+# --- SETTINGS ---
+latent_dim = 10     # 10 random numbers as input for the Generator
+data_dim = 4        # 4 features: length, ttl, protocol, port
+epochs = 500        # How many times to practice
+
+# Initialize models
+generator = Generator(latent_dim, data_dim)
+discriminator = Discriminator(data_dim)
+
+# Optimizers (The "Learning" engine)
+g_optimizer = optim.Adam(generator.parameters(), lr=0.0002)
+d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0002)
+loss_function = nn.BCELoss() # Binary Cross Entropy
+
+# --- THE LOOP ---
+for epoch in range(epochs):
+    # 1. TRAIN DISCRIMINATOR
+    d_optimizer.zero_grad()
+    
+    # Real data (from your CSV)
+    real_labels = torch.ones(n_rows, 1)
+    output_real = discriminator(real_samples)
+    loss_real = loss_function(output_real, real_labels)
+    
+    # Fake data (from Generator)
+    noise = torch.randn(n_rows, latent_dim)
+    fake_samples = generator(noise)
+    fake_labels = torch.zeros(n_rows, 1)
+    output_fake = discriminator(fake_samples.detach())
+    loss_fake = loss_function(output_fake, fake_labels)
+    
+    # Backpropagate d_loss = loss_real + loss_fake
+    d_loss.backward()
+    d_optimizer.step()
+
+    # 2. TRAIN GENERATOR
+    g_optimizer.zero_grad()
+    output = discriminator(fake_samples)
+    # We want the discriminator to think these are REAL (1)
+    g_loss = loss_function(output, real_labels) 
+    
+    g_loss.backward()
+    g_optimizer.step()
+
+    if epoch % 100 == 0:
+        print(f"Epoch {epoch}: G_Loss: {g_loss.item():.4f}, D_Loss: {d_loss.item():.4f}")
+
+print("Training Complete! Your Generator is now a master of IoT traffic.")
+
+# Create 5 new "Fake" IoT packets
+new_noise = torch.randn(5, latent_dim)
+generated_data = generator(new_noise)
+
+# Convert back from 0-1 to real numbers (Port, TTL, etc.)
+final_packets = scaler.inverse_transform(generated_data.detach().numpy())
+
+# Convert to a readable DataFrame
+fake_df = pd.DataFrame(final_packets, columns=feature_columns)
+print("--- GENERATED IOT TRAFFIC ---")
+print(fake_df)
+
+!pip install scapy
+from scapy.all import sniff
+
+# Function to process each captured packet
+def packet_callback(packet):
+    if packet.haslayer('IP'):
+        print(f"Source: {packet['IP'].src} -> Dest: {packet['IP'].dst}")
+
+# Sniff 10 packets, focusing only on IP traffic
+sniff(filter="ip", prn=packet_callback, count=10)
+
+import scapy.all as scapy
+
+# Try this specific import path if the previous one failed
+try:
+    from scapy.arch.windows import L3RawSocket
+    scapy.conf.L3socket = L3RawSocket
+    print("Success: Using Layer 3 Raw Sockets")
+except ImportError:
+    print("Layer 3 hack failed. Please install Npcap from npcap.com")
+
+# Now your Honey-Trap code should run
+# Note: Ensure you run your terminal/notebook as ADMINISTRATOR
