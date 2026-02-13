@@ -1,0 +1,31 @@
+Good evening, We are the members of team Quantum Leap, a group of first year students passionate about the intersection of AI and Cybersecurity. ﻿
+Our team came together with a single goal : the goal to solve the 'Data gap' in IoT Security.  IoT is not just a bit insecure: it is a cyber-security nightmare.﻿
+I, Sweety Kumari, the team lead will brief you about our prototype and the demo flow. We used GAN (Generative Adversarial Network) architecture to synthesize attack traffic over traditional methods like firewall. Firewalls are reactive, they use signatures. They need to see "real  traffic" to learn, which risk exposing private user data.﻿
+Our project is Proactive, our GAN doesn't wait for a new virus to be invented. We are training our system for Zero-day attacks of tomorrow, not the attacks of yesterday.﻿
+In this, we use synthetic data, we can simulate high intensity attacks without ever touching a real user's private information.﻿
+To do this, we divided our expertise into three critical areas:﻿
+Generative AI﻿
+Network Enginnering ﻿
+Active Defence ﻿
+
+I and Gahira, led the AI development and Network Architect, my teammates, Shrisha and Pari handled the Security Analyst using Scapy and Sockets -based traps.﻿
+
+To understand why we built an AI driven trap , we first have to understand the crisis of IoT security. Many IoT devices come with default usernames and passwords like 'admin' or '1234’. Many of us never change them , this creates a front door that is effectively wise open for any basic virus to enter. ﻿
+﻿
+Jupyter notebook JN : the environment that hosts the code and shows the LLM's our controller "chain of thoughts " and display live graphs of the threat level.﻿
+Using libraries like numpy and pandas , we created 1000 synthetic data using python build in function like random.randint , these datas are stored in a CSV file named as iot_traffic.csv. ﻿
+Raw network traffic is binary - it's just 1 and 0 moving across a wire. By converting these packets into a CSV data , we can extract specific features like packet size , protocol.﻿
+We also used OS library to verify if the file exists or not. ﻿
+Then we installed PyTorch as the reflex of the system. It's efficient because it allows us to change the AI logic instantly if a judge asks a " what if question"﻿
+It consist of a generator (it's job is to generated fake IoT packet)  and a discriminator the judge that look at data and discriminate whether it is authentic or an attack.﻿
+By training a GAN using generator and discriminator, we create a threat factory.To train our GAN we needed a way to store data and ports that our AI could actually understand. We chose the csv format as our primary data structure for three main reasons: portability, precision and pre-processing.﻿
+One of the biggest challenges in training a GAN for network security is the massive variation in our data, for example: a destination port can be as high as 78,820  while tcp flag might only be 0 or 1. To solve this, we used "min max scalar", it performs a linear transformation that takes the minimum and maximum values of every feature and squashes them into a fixed range, usually between 0 and 1.﻿
+
+Once the training gets completed, we print a message "training complete, your generator is now a master of IoT traffic".﻿
+
+Now the generated IoT traffic is created after training the GAN architecture.﻿
+
+
+We aren't just doing a "hello world" AI project, we are building a closed loop security system.﻿
+To handle the security analyst, and to build a complete defense system we needed to operate at two different levels of network that's why we used Scapy and Sockets library.﻿
+At first we used Scapy that handles the inspection and trapping part. Then we used socket module to create our honey trap. To a hacker's script, our Sockets looks like a real IoT device waiting for a connection. In our demo the Sockets acts as the security guard standing at the door, while Scapy is the forensic lab in the back. The Sockets accepts the hit using LLM's and Scapy immediately analyses the packet to decide if it's a malicious synthetic attack that needs to be blacklisted.
